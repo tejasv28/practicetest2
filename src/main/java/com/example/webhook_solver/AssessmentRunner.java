@@ -67,9 +67,8 @@ public class AssessmentRunner implements CommandLineRunner {
             submitHeaders.setContentType(MediaType.APPLICATION_JSON);
 
             
-            // Ensure standard JWT Bearer prefix
-            String authHeaderValue = accessToken.startsWith("Bearer ") ? accessToken : "Bearer " + accessToken;
-            submitHeaders.set("Authorization", authHeaderValue);
+            // Set exactly to the access token as requested: Authorization: <accessToken>
+            submitHeaders.set("Authorization", accessToken);
 
             
             Map<String, String> submitBody = new HashMap<>();
