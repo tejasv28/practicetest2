@@ -59,14 +59,13 @@ public class WebhookAssessmentService implements CommandLineRunner {
                     return;
                 }
 
-                // Problem Statement: REG12347 -> ends with 47 (Odd). Solves Question 1.
-                String sqlQuery = "SELECT p.AMOUNT AS SALARY, CONCAT(e.FIRST_NAME, ' ', e.LAST_NAME) AS NAME, " +
+                // Question 1 asks for the 2nd-highest salary using a correlated subquery
+                String sqlQuery = "SELECT p1.AMOUNT AS SALARY, CONCAT(e.FIRST_NAME, ' ', e.LAST_NAME) AS NAME, " +
                                   "FLOOR(DATEDIFF(CURRENT_DATE, e.DOB) / 365.25) AS AGE, d.DEPARTMENT_NAME " +
-                                  "FROM PAYMENTS p " +
-                                  "JOIN EMPLOYEE e ON p.EMP_ID = e.EMP_ID " +
+                                  "FROM PAYMENTS p1 " +
+                                  "JOIN EMPLOYEE e ON p1.EMP_ID = e.EMP_ID " +
                                   "JOIN DEPARTMENT d ON e.DEPARTMENT = d.DEPARTMENT_ID " +
-                                  "WHERE DAY(p.PAYMENT_TIME) != 1 " +
-                                  "ORDER BY p.AMOUNT DESC LIMIT 1;";
+                                  "WHERE 1 = (SELECT COUNT(DISTINCT p2.AMOUNT) FROM PAYMENTS p2 WHERE p2.AMOUNT > p1.AMOUNT);";
 
                 logger.info("Executing solution submission...");
                 submitSolution(webhook, accessToken, sqlQuery);
@@ -89,13 +88,26 @@ public class WebhookAssessmentService implements CommandLineRunner {
         QuerySubmission submission = new QuerySubmission(sqlQuery);
         HttpEntity<QuerySubmission> submitEntity = new HttpEntity<>(submission, submitHeaders);
 
-        try {
-            ResponseEntity<String> submitResponse = restTemplate.postForEntity(webhookUrl, submitEntity, String.class);
-            logger.info("Solution submitted successfully!");
-            logger.info("Response Code: {}", submitResponse.getStatusCode());
-            logger.info("Response Body: {}", submitResponse.getBody());
-        } catch (Exception ex) {
-            logger.error("Failed to submit solution: ", ex);
+        int maxRetries = 3;
+        for (int i = 1; i <= maxRetries; i++) {
+            try {
+                ResponseEntity<String> submitResponse = restTemplate.postForEntity(webhookUrl, submitEntity, String.class);
+                logger.info("Solution submitted successfully on attempt {}!", i);
+                logger.info("Response Code: {}", submitResponse.getStatusCode());
+                logger.info("Response Body: {}", submitResponse.getBody());
+                return;
+            } catch (Exception ex) {
+                logger.error("Failed to submit solution (Attempt {}/{}): {}", i, maxRetries, ex.getMessage());
+                if (i == maxRetries) {
+                    logger.error("Max retries reached. Submission failed.");
+                } else {
+                    try {
+                        Thread.sleep(2000 * i); // Back-off
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
         }
     }
 }
